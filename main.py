@@ -10,6 +10,7 @@ import os
 import logging
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+import threading
 from config import APP_NAME, VERSION
 from cleaner_logic import CleanerLogic
 from backup_manager import BackupManagerWindow
@@ -131,7 +132,7 @@ class CleanerApp(tk.Tk):
         backup_frame = ttk.Frame(safety_frame)
         backup_frame.pack(fill=tk.X, pady=2)
 
-        self.backup_var = tk.BooleanVar(value=True)
+        self.backup_var = tk.BooleanVar(value=False)
         self.backup_check = ttk.Checkbutton(backup_frame, text="删除前备份文件",
                                            variable=self.backup_var)
         self.backup_check.pack(side=tk.LEFT)
@@ -172,20 +173,28 @@ class CleanerApp(tk.Tk):
         self.progress_bar.start()
         self.status_label.config(text="正在扫描系统，请稍候...")
 
-        # 使用after方法在后台执行扫描
-        self.after(100, self.perform_scan)
+        # 创建并启动扫描线程
+        scan_thread = threading.Thread(target=self.perform_scan)
+        scan_thread.daemon = True  # 设置为守护线程
+        scan_thread.start()
 
     def perform_scan(self):
         """执行扫描操作"""
         try:
             self.scan_results = self.cleaner.scan_system()
-            self.after(100, self.on_scan_finished)
+            # 使用after方法在主线程中更新UI
+            self.after(0, self.on_scan_finished)
         except Exception as e:
             logger.error(f"扫描过程中出错: {e}")
-            messagebox.showerror("扫描错误", f"扫描过程中出错: {e}")
-            self.progress_bar.stop()
-            self.progress_bar.pack_forget()
-            self.scan_button.config(state=tk.NORMAL)
+            # 使用after方法在主线程中显示错误
+            self.after(0, lambda: messagebox.showerror("扫描错误", f"扫描过程中出错: {e}"))
+            self.after(0, self.reset_scan_ui)
+
+    def reset_scan_ui(self):
+        """重置扫描UI状态"""
+        self.progress_bar.stop()
+        self.progress_bar.pack_forget()
+        self.scan_button.config(state=tk.NORMAL)
 
     def on_scan_finished(self):
         """扫描完成后的处理"""

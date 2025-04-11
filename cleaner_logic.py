@@ -12,6 +12,8 @@ import time
 import glob
 import logging
 import datetime
+import concurrent.futures
+from functools import partial
 
 # 配置日志
 logging.basicConfig(
@@ -328,47 +330,59 @@ class CleanerLogic:
             'large_files': []    # 大文件
         }
 
-        # 基本清理
-        self._scan_temp_files(results)        # 临时文件
-        self._scan_recycle_bin(results)       # 回收站
-        self._scan_browser_cache(results)     # 浏览器缓存
-        self._scan_system_logs(results)       # 系统日志
-        self._scan_windows_updates(results)   # Windows更新缓存
-        self._scan_thumbnails_cache(results)  # 缩略图缓存
+        # 定义扫描任务列表
+        scan_tasks = [
+            (self._scan_temp_files, results),
+            (self._scan_recycle_bin, results),
+            (self._scan_browser_cache, results),
+            (self._scan_system_logs, results),
+            (self._scan_windows_updates, results),
+            (self._scan_thumbnails_cache, results),
+            (self._scan_prefetch, results),
+            (self._scan_old_windows, results),
+            (self._scan_error_reports, results),
+            (self._scan_service_packs, results),
+            (self._scan_memory_dumps, results),
+            (self._scan_font_cache, results),
+            (self._scan_disk_cleanup_backup, results),
+            (self._scan_app_cache, results),
+            (self._scan_media_cache, results),
+            (self._scan_search_index, results),
+            (self._scan_backup_temp, results),
+            (self._scan_update_temp, results),
+            (self._scan_driver_backup, results),
+            (self._scan_app_crash, results),
+            (self._scan_app_logs, results),
+            (self._scan_recent_items, results),
+            (self._scan_notification_cache, results),
+            (self._scan_dns_cache, results),
+            (self._scan_printer_temp, results),
+            (self._scan_device_temp, results),
+            (self._scan_windows_defender, results),
+            (self._scan_store_cache, results),
+            (self._scan_onedrive_cache, results),
+            # (self._scan_downloads_immediate, results),
+            (self._scan_installer_cache_safe, results),
+            (self._scan_delivery_optimization, results),
+            # (self._scan_large_files, results)
+        ]
 
-        # 扩展清理 (已移除休眠文件、传递优化缓存、下载文件夹和安装程序缓存)
-        self._scan_prefetch(results)          # 预读取文件
-        self._scan_old_windows(results)       # 旧Windows文件
-        self._scan_error_reports(results)     # 错误报告
-        self._scan_service_packs(results)     # 服务包备份
-        self._scan_memory_dumps(results)      # 内存转储文件
-        self._scan_font_cache(results)        # 字体缓存
-        self._scan_disk_cleanup_backup(results) # 磁盘清理备份
+        # 使用线程池执行扫描任务
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            # 提交所有任务
+            future_to_task = {
+                executor.submit(task[0], task[1]): task[0].__name__
+                for task in scan_tasks
+            }
 
-        # 新增安全清理项
-        self._scan_app_cache(results)         # 应用程序缓存
-        self._scan_media_cache(results)       # 媒体播放器缓存
-        self._scan_search_index(results)      # 搜索索引临时文件
-        self._scan_backup_temp(results)       # 备份临时文件
-        self._scan_update_temp(results)       # 更新临时文件
-        self._scan_driver_backup(results)     # 驱动备份
-        self._scan_app_crash(results)         # 应用程序崩溃转储
-        self._scan_app_logs(results)          # 应用程序日志
-        self._scan_recent_items(results)      # 最近使用的文件列表缓存
-        self._scan_notification_cache(results) # Windows通知缓存
-        self._scan_dns_cache(results)         # DNS缓存
-        self._scan_printer_temp(results)      # 打印机临时文件
-        self._scan_device_temp(results)       # 设备临时文件
-        self._scan_windows_defender(results)  # Windows Defender缓存
-        self._scan_store_cache(results)       # Windows Store缓存
-        self._scan_onedrive_cache(results)    # OneDrive缓存
-
-        # 新增用户请求的清理项
-        self._scan_downloads_immediate(results)    # 下载文件夹(立即清理)
-        self._scan_installer_cache_safe(results) # 安装程序缓存(30天前)
-
-        # 大文件扫描
-        self._scan_large_files(results)       # 大文件
+            # 处理完成的任务
+            for future in concurrent.futures.as_completed(future_to_task):
+                task_name = future_to_task[future]
+                try:
+                    future.result()
+                    logger.info(f"完成扫描任务: {task_name}")
+                except Exception as e:
+                    logger.error(f"扫描任务 {task_name} 失败: {e}")
 
         logger.info(f"扫描完成，找到 {sum(len(items) for items in results.values())} 个可清理项目")
         return results
