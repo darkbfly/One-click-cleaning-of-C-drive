@@ -88,7 +88,7 @@ class CleanerApp(tk.Tk):
 
         # 创建Treeview用于显示结果
         columns = ("name", "size", "path")
-        self.result_tree = ttk.Treeview(result_frame, columns=columns, show="tree headings")
+        self.result_tree = ttk.Treeview(result_frame, columns=columns, show="headings")
 
         # 设置列标题
         self.result_tree.heading("name", text="项目")
@@ -101,12 +101,18 @@ class CleanerApp(tk.Tk):
         self.result_tree.column("path", width=400)
 
         # 添加滚动条
-        scrollbar = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.result_tree.yview)
-        self.result_tree.configure(yscrollcommand=scrollbar.set)
+        y_scrollbar = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.result_tree.yview)
+        x_scrollbar = ttk.Scrollbar(result_frame, orient=tk.HORIZONTAL, command=self.result_tree.xview)
+        self.result_tree.configure(yscrollcommand=y_scrollbar.set, xscrollcommand=x_scrollbar.set)
 
-        # 放置Treeview和滚动条
-        self.result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        # 使用网格布局放置Treeview和滚动条
+        self.result_tree.grid(row=0, column=0, sticky="nsew")
+        y_scrollbar.grid(row=0, column=1, sticky="ns")
+        x_scrollbar.grid(row=1, column=0, sticky="ew")
+
+        # 配置网格权重
+        result_frame.grid_rowconfigure(0, weight=1)
+        result_frame.grid_columnconfigure(0, weight=1)
 
         # 安全选项区域
         safety_frame = ttk.LabelFrame(main_frame, text="安全选项", padding="5")
