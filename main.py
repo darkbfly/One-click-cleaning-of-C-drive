@@ -550,7 +550,13 @@ class CleanerApp(tk.Tk):
             for item_id in self.result_tree.get_children(category_id):
                 self.result_tree.selection_add(item_id)
                 self.result_tree.set(item_id, "select", "☑")
-                self.selected_items.append(self.result_tree.item(item_id, "values"))
+                path = self.result_tree.item(item_id, "values")[3]
+                # 在scan_results中查找对应的项目
+                for category in self.scan_results.values():
+                    for item in category:
+                        if item['path'] == path:
+                            self.selected_items.append(item)
+            
 
         # 更新清理按钮状态
         self.clean_button.config(state=tk.NORMAL)
