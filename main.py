@@ -5,6 +5,7 @@
 C盘清理工具 - 安全高效地清理C盘不必要的文件
 """
 
+import ctypes
 import sys
 import os
 import logging
@@ -88,18 +89,20 @@ class CleanerApp(tk.Tk):
         result_frame.pack(fill=tk.BOTH, expand=True, pady=5)
 
         # 创建Treeview用于显示结果
-        columns = ("name", "size", "path")
+        columns = ("select", "name", "size", "path")
         self.result_tree = ttk.Treeview(result_frame, columns=columns, show="headings")
 
         # 设置列标题
+        self.result_tree.heading("select", text="选择")
         self.result_tree.heading("name", text="项目")
         self.result_tree.heading("size", text="大小")
         self.result_tree.heading("path", text="路径")
 
         # 设置列宽
+        self.result_tree.column("select", width=20)
         self.result_tree.column("name", width=200)
-        self.result_tree.column("size", width=100)
-        self.result_tree.column("path", width=400)
+        self.result_tree.column("size", width=70)
+        self.result_tree.column("path", width=500)
 
         # 添加滚动条
         y_scrollbar = ttk.Scrollbar(result_frame, orient=tk.VERTICAL, command=self.result_tree.yview)
@@ -278,7 +281,7 @@ class CleanerApp(tk.Tk):
             # 添加类别节点
             category_id = self.result_tree.insert(
                 "", "end", text=category_name,
-                values=(category_name, self.format_size(category_size), "")
+                values=("☐", category_name, self.format_size(category_size), "")
             )
 
             # 添加文件节点
@@ -291,14 +294,14 @@ class CleanerApp(tk.Tk):
                     file_info = f"{file_name} [修改时间: {item['modified']}] [类型: {item['extension']}]"
                     self.result_tree.insert(
                         category_id, "end", text=file_name,
-                        values=(file_info, self.format_size(item['size']), item['path']),
+                        values=("☐", file_info, self.format_size(item['size']), item['path']),
                         tags=("item",)
                     )
                 else:
                     # 对于普通文件，只显示文件名和大小
                     self.result_tree.insert(
                         category_id, "end", text=file_name,
-                        values=(file_name, self.format_size(item['size']), item['path']),
+                        values=("☐", file_name, self.format_size(item['size']), item['path']),
                         tags=("item",)
                     )
 
@@ -306,33 +309,62 @@ class CleanerApp(tk.Tk):
         for item_id in self.result_tree.get_children():
             self.result_tree.item(item_id, open=True)
 
-    def start_clean(self):
-        """开始清理选中的项目"""
-        # 获取选中的项目
-        selected_ids = self.result_tree.selection()
-        if not selected_ids:
-            messagebox.showinfo("提示", "请先选择要清理的项目")
-            return
+        self.result_tree.bind("<ButtonRelease-1>", self.on_item_click)
 
-        # 收集选中的项目数据
-        self.selected_items = []
-        for item_id in selected_ids:
-            # 检查是否是文件项目（不是类别）
-            parent_id = self.result_tree.parent(item_id)
-            if parent_id:  # 如果有父节点，说明是文件项目
-                path = self.result_tree.item(item_id, "values")[2]
+    def on_item_click(self, event):
+        """处理点击事件，切换复选框状态"""
+        # 获取点击的行和列
+        region = self.result_tree.identify_region(event.x, event.y)
+        if region == "cell":
+            column = self.result_tree.identify_column(event.x)  # 点击的列
+            item_id = self.result_tree.identify_row(event.y)    # 点击的行
+            print(column, item_id)
+            # 如果点击的是“选择”列，则切换复选框状态
+            if column == "#1":  # 第二列（"Selected" 列）
+                current_state = self.result_tree.item(item_id, "values")[0]
+                new_state = "☑" if current_state == "☐" else "☐"
+                self.result_tree.set(item_id, "select", new_state)
+                path = self.result_tree.item(item_id, "values")[3]
                 # 在scan_results中查找对应的项目
                 for category in self.scan_results.values():
                     for item in category:
                         if item['path'] == path:
-                            self.selected_items.append(item)
+                            if new_state == "☑":
+                                self.selected_items.append(item)
+                            else:
+                                self.selected_items.append(item)
                             break
+                
+                    
+    
+    def start_clean(self):
+        # """开始清理选中的项目"""
+        # # 获取选中的项目
+        # selected_ids = self.result_tree.selection()
+        # if not selected_ids:
+        #     messagebox.showinfo("提示", "请先选择要清理的项目")
+        #     return
+
+        # # 收集选中的项目数据
+        # self.selected_items = []
+        # for item_id in selected_ids:
+        #     # 检查是否是文件项目（不是类别）
+        #     parent_id = self.result_tree.parent(item_id)
+        #     if parent_id:  # 如果有父节点，说明是文件项目
+        #         path = self.result_tree.item(item_id, "values")[2]
+        #         # 在scan_results中查找对应的项目
+        #         for category in self.scan_results.values():
+        #             for item in category:
+        #                 if item['path'] == path:
+        #                     self.selected_items.append(item)
+        #                     break
 
         if not self.selected_items:
             messagebox.showinfo("提示", "请选择具体的文件或目录进行清理")
             return
 
         # 确认对话框
+        print(self.selected_items)
         total_size = sum(item['size'] for item in self.selected_items)
         if self.simulate_var.get():
             message = f"您选择了模拟模式，将会模拟清理 {len(self.selected_items)} 个项目，总计 {self.format_size(total_size)}。"
@@ -517,6 +549,8 @@ class CleanerApp(tk.Tk):
             # 选中该类别下的所有文件
             for item_id in self.result_tree.get_children(category_id):
                 self.result_tree.selection_add(item_id)
+                self.result_tree.set(item_id, "select", "☑")
+                self.selected_items.append(self.result_tree.item(item_id, "values"))
 
         # 更新清理按钮状态
         self.clean_button.config(state=tk.NORMAL)
@@ -524,7 +558,17 @@ class CleanerApp(tk.Tk):
     def deselect_all_items(self):
         """取消全选"""
         # 取消选中所有项目
+        self.selected_items = []
         self.result_tree.selection_remove(self.result_tree.selection())
+
+        for category_id in self.result_tree.get_children():
+            # 设置类别项为选中状态
+            self.result_tree.item(category_id, open=True)  # 展开类别
+
+            # 选中该类别下的所有文件
+            for item_id in self.result_tree.get_children(category_id):
+                self.result_tree.set(item_id, "select", "☐")
+            
 
         # 更新清理按钮状态
         self.clean_button.config(state=tk.DISABLED)
@@ -565,5 +609,16 @@ def main():
 
     logger.info(f"{APP_NAME} 已退出")
 
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+    
 if __name__ == "__main__":
-    main()
+    if not is_admin():
+    # 重新启动脚本并请求管理员权限
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, " ".join(sys.argv), None, 1)
+    else:
+        print("脚本正在以管理员权限运行")
+        main()
