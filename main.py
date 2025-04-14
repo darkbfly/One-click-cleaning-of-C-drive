@@ -318,7 +318,7 @@ class CleanerApp(tk.Tk):
         if region == "cell":
             column = self.result_tree.identify_column(event.x)  # 点击的列
             item_id = self.result_tree.identify_row(event.y)    # 点击的行
-            print(column, item_id)
+            # print(column, item_id)
             # 如果点击的是“选择”列，则切换复选框状态
             if column == "#1":  # 第二列（"Selected" 列）
                 current_state = self.result_tree.item(item_id, "values")[0]
@@ -364,7 +364,7 @@ class CleanerApp(tk.Tk):
             return
 
         # 确认对话框
-        print(self.selected_items)
+        # print(self.selected_items)
         total_size = sum(item['size'] for item in self.selected_items)
         if self.simulate_var.get():
             message = f"您选择了模拟模式，将会模拟清理 {len(self.selected_items)} 个项目，总计 {self.format_size(total_size)}。"
@@ -390,8 +390,10 @@ class CleanerApp(tk.Tk):
         self.progress_bar.start()
         self.status_label.config(text="正在清理文件，请稍候...")
 
-        # 使用after方法在后台执行清理
-        self.after(100, self.perform_clean)
+        # 创建并启动扫描线程
+        clean_thread = threading.Thread(target=self.perform_clean)
+        clean_thread.daemon = True  # 设置为守护线程
+        clean_thread.start()
 
     def perform_clean(self):
         """执行清理操作"""
@@ -604,10 +606,21 @@ class CleanerApp(tk.Tk):
         })
 
         # 使用after方法在后台执行扫描和清理
-        self.after(100, self.perform_clean_all)
+        # self.after(100, self.perform_clean_all)
+        clean_thread = threading.Thread(target=self.perform_clean_all)
+        clean_thread.daemon = True  # 设置为守护线程
+        clean_thread.start()
 
 def main():
     """应用程序入口点"""
+    # 检查是否是控制台应用程序
+    if sys.executable.endswith("python.exe"):
+        # 获取当前窗口句柄
+        hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if hwnd:
+            # 隐藏控制台窗口
+            ctypes.windll.user32.ShowWindow(hwnd, 0)
+
     logger.info(f"启动 {APP_NAME} v{VERSION}")
 
     app = CleanerApp()
